@@ -1,0 +1,15 @@
+meta {
+  name: get -api-User--id
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/User/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: 
+}

@@ -1,0 +1,17 @@
+meta {
+  name: delete -api-Anomaly
+  type: http
+  seq: 2
+}
+
+delete {
+  url: {{baseUrl}}/api/Anomaly
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "route": ""
+  }
+}

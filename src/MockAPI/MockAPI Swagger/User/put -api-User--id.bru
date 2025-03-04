@@ -1,0 +1,15 @@
+meta {
+  name: put -api-User--id
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/User/:id
+  body: json
+  auth: none
+}
+
+params:path {
+  id: 
+}
