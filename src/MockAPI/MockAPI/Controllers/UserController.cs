@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using MockAPI.Anomaly;
-using MockAPI.Services;
+using AnomalyApi.Anomaly;
+using AnomalyApi.User;
 
-namespace MockAPI.Controllers;
+namespace AnomalyApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
@@ -23,7 +23,8 @@ public class UserController : ControllerBase
     // GET: api/<UserController>
     [HttpGet]
     public async Task<IEnumerable<string>> Get() {
-        await _anomalyService.ExecuteParallel(Request.Path.Value ?? "");
+        await _anomalyService.Trigger();
+
         _logger.LogInformation("Fetched all users");
 
         return new string[] { "value1", "value2" };
@@ -31,7 +32,9 @@ public class UserController : ControllerBase
 
     // GET api/<UserController>/5
     [HttpGet("{id}")]
-    public string Get(int id) {
+    public async Task<string> Get(int id) {
+        await _anomalyService.Trigger();
+
         _logger.LogInformation("Fetched user {id}", id);
 
         return "value";
@@ -39,19 +42,31 @@ public class UserController : ControllerBase
 
     // POST api/<UserController>
     [HttpPost]
-    public void Post([FromBody] string value) {
-        _logger.LogInformation("Creating user: {user}", value);
+    public async Task<IActionResult> Post([FromBody] UserRequestDto userRequest) {
+        await _anomalyService.Trigger();
+
+        _logger.LogInformation("Creating user: {@user}", userRequest);
+
+        return new OkResult();
     }
 
     // PUT api/<UserController>/5
     [HttpPut("{id}")]
-    public void Put(int id, [FromBody] string value) {
-        _logger.LogInformation("Updating user {id}: {updatedUser}", id, value);
+    public async Task<IActionResult> Put(int id, [FromBody] UserRequestDto userRequest) {
+        await _anomalyService.Trigger();
+
+        _logger.LogInformation("Updating user {id}: {@user}", id, userRequest);
+
+        return new OkResult();
     }
 
     // DELETE api/<UserController>/5
     [HttpDelete("{id}")]
-    public void Delete(int id) {
+    public async Task<IActionResult> Delete(int id) {
+        await _anomalyService.Trigger();
+
         _logger.LogWarning("Deleting user {id}", id);
+
+        return new OkResult();
     }
 }

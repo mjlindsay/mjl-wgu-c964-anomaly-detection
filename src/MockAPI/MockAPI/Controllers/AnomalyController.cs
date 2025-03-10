@@ -1,51 +1,44 @@
 using Microsoft.AspNetCore.Mvc;
-using MockAPI.Anomaly;
+using AnomalyApi.Anomaly;
 
-namespace MockAPI.Controllers;
+namespace AnomalyApi.Controllers;
 
 [Route("api/[controller]")]
 public class AnomalyController :ControllerBase
 {
 
-    private readonly AnomalyRegistry _anomalyRegistry;
+    private readonly AnomalyService _anomalyService;
 
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<AnomalyController> _logger;
 
     public AnomalyController(
-        AnomalyRegistry anomalyRegistry,
+        AnomalyService anomalyRegistry,
         ILoggerFactory loggerFactory,
         ILogger<AnomalyController> logger
     ) {
-        _anomalyRegistry = anomalyRegistry;
+        _anomalyService = anomalyRegistry;
         _loggerFactory = loggerFactory;
         _logger = logger;
     }
 
     [HttpGet]
-    public IActionResult GetAnomalies() {
-        return new OkObjectResult(_anomalyRegistry.GetAnomalies());
+    public AnomalyOptions GetAnomalyOptions() {
+        return _anomalyService.GetAnomalyOptions();
     }
 
     [HttpPost]
-    public IActionResult RegisterAnomaly(
-        [FromBody] RegisterAnomalyRequest registerAnomalyRequest) {
+    public IActionResult UpdateAnomalyOptions(
+        [FromBody] AnomalyOptions anomalyOptionsDto) {
 
-        try {
-            _anomalyRegistry.RegisterAnomaly(registerAnomalyRequest.ToAnomaly(_loggerFactory.CreateLogger<RegisterAnomalyRequest>()));
-        } catch (Exception ex) {
-            _logger.LogError(ex, "Unable to register anomaly");
-
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+        _anomalyService.UpdateAnomalyOptions(anomalyOptionsDto);
 
         return StatusCode(StatusCodes.Status200OK);
     }
 
     [HttpDelete]
-    public IActionResult ClearAnomalies(
-        [FromBody] RegisterAnomalyRequest clearAnomaliesRequest) {
-        _anomalyRegistry.ClearAnomalies(clearAnomaliesRequest.Route);
+    public IActionResult ClearAnomalies() {
+        _anomalyService.DisableAnomalies();
 
         return StatusCode(StatusCodes.Status200OK);
     }

@@ -1,4 +1,4 @@
-namespace MockAPI.Utils;
+namespace AnomalyApi.Utils;
 
 public static class IEnumerableExtensions
 

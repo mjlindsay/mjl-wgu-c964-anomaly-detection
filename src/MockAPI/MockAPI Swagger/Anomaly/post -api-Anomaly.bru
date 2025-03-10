@@ -1,7 +1,7 @@
 meta {
   name: post -api-Anomaly
   type: http
-  seq: 1
+  seq: 4
 }
 
 post {
@@ -12,8 +12,9 @@ post {
 
 body:json {
   {
-    "$type": "DELAY",
-    "route": "ALL",
-    "delay": "00:00:01"
+    "causeException": true,
+    "delayMs": 1000,
+    "exceptionRate": 0.05,
+    "delayRate": 0.01
   }
 }

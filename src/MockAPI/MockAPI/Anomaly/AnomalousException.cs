@@ -1,4 +1,4 @@
-namespace MockAPI.Anomaly;
+namespace AnomalyApi.Anomaly;
 
 public class AnomalousException : Exception
 {

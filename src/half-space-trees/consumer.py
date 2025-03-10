@@ -1,25 +1,39 @@
 #!/usr/bin/env python
 
+import argparse
 import datetime
 import json
 from confluent_kafka import Consumer
-from river import preprocessing
+from river import preprocessing, metrics, datasets, compose, anomaly
+from csv import writer
 
-oh = preprocessing.OneHotEncoder()
-def one_hot_encode(raw_json):
-    return oh.transform_one(raw_json)
+parser = argparse.ArgumentParser(
+    description='Anomaly detection using Half-Space Trees'
+)
 
-fh = preprocessing.FeatureHasher()
-def feature_hash(raw_json):
-    return oh.transform_one(raw_json)
+parser.add_argument(
+    '-t', '--training',
+    default=False,
+    action='store_true',
+    help='Run in training mode (learning without anomaly detection)')
+
+parser.add_argument(
+    '-s', '--stage-output',
+    default=False,
+    action='store_true',
+    help='Output feature data at different stages of the pipeline (raw input, manual, etc.)'
+)
+
+args = parser.parse_args()
 
 def write_stage(stage_name, dict):
+    if not args.stage_output:
+        return
+    
     timestamp = datetime.datetime.now().strftime('%H-%M-%S-%f')
 
     with open(f'{stage_name}_{timestamp}.json', 'w') as f:
         json.dump(dict, f, indent=4)
-
-ordinal_encoder = preprocessing.OrdinalEncoder()
 
 def extract_metric_features(data):
     flattened_features = {}
@@ -53,11 +67,13 @@ method_map = {
     'PATCH': 8
 }
 
+# Routes that should not be included as they are used for setup and demonstration purposes.
+exclude_routes = [
+    "api/Anomaly",
+]
+
 def extract_request_duration_features(metric_name, metric):
-    features = {
-        'categorical': {},
-        'unscaled_numeric': {}
-    }
+    features = {}
 
     # Loop dataPoints and tabulate
     for dp in metric['histogram']['dataPoints']:
@@ -68,6 +84,8 @@ def extract_request_duration_features(metric_name, metric):
             continue
 
         route = route_attr['stringValue']
+        if route in exclude_routes:
+            continue
 
         count = int(dp.get('count', 0))
         total_duration = dp['sum']
@@ -79,15 +97,66 @@ def extract_request_duration_features(metric_name, metric):
         method = dict_attributes['http.request.method']['stringValue']
         status_code = int(dict_attributes['http.response.status_code']['intValue'])
 
-        features['unscaled_numeric'] = features['unscaled_numeric'] | {
-            f'{route}.request_count': count,
-            f'{route}.total_duration': total_duration,
-            f'{route}.avg_duration': avg_duration,
-            f'{route}.method': method_map[method],
-            f'{route}.status_code': status_code,
+        route_feature_key = f'{method}.{status_code}.{route}'
+        features = features | {
+            f'{route_feature_key}.request_count': count,
+            f'{route_feature_key}.total_duration': total_duration,
+            f'{route_feature_key}.avg_duration': avg_duration,
+            f'{route_feature_key}.status_code': status_code
         }
 
     return features
+
+# Setup ML Model
+scaler = preprocessing.MinMaxScaler()
+half_space_trees = anomaly.HalfSpaceTrees(
+    n_trees=10,
+    height=3,
+    window_size=1000,
+    seed=10427
+)
+filter = anomaly.QuantileFilter(q = 0.95, anomaly_detector=half_space_trees)
+
+model = compose.Pipeline(
+    scaler,
+    filter
+)
+
+accuracy = metrics.Accuracy()
+
+def do_anomaly_detection(features: dict):
+    # Anomaly detection!
+    model.learn_one(features)
+    score = model.score_one(features)
+    is_anomaly = model['QuantileFilter'].classify(score)
+
+    print(f"Features: {features}, Score: {score}, Anomaly: {is_anomaly}")
+
+training_data_buffer = []
+def record_training_data(features: dict):    
+    is_anomaly = False
+
+    for feature_key, feature_value in features.items():
+        if "status_code" in feature_key:
+            if feature_value >= 300:
+                is_anomaly = True
+                break
+        if "avg_duration" in feature_key:
+            if feature_value >= .275:
+                is_anomaly = True
+                break
+    
+    features = features | { is_anomaly: is_anomaly }
+
+    training_data_buffer.append(features)
+
+    if len(training_data_buffer) >= 1500:
+        timestamp = datetime.datetime.now().strftime('%H-%M-%S-%f')
+
+        with open(f'training_data_{timestamp}.json', 'w') as f:
+            json.dump(training_data_buffer, f, indent=4)
+        
+        training_data_buffer.clear()
 
 if __name__ == '__main__':
     config = {
@@ -129,12 +198,10 @@ if __name__ == '__main__':
                 manually_transformed_features = extract_metric_features(data)
                 write_stage('manual', manually_transformed_features)
 
-                # fh_transformed = feature_hash(data)
-                # write_stage('feature_hash', fh_transformed)
-
-                # oh_transformed = one_hot_encode(fh_transformed)
-                # write_stage('one_hot', oh_transformed)
-
+                if args.training:
+                    record_training_data(manually_transformed_features)
+                else:
+                    do_anomaly_detection(manually_transformed_features)
     except KeyboardInterrupt:
         pass
     finally:

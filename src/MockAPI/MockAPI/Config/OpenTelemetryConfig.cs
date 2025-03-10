@@ -1,7 +1,7 @@
 ﻿using Serilog.Sinks.OpenTelemetry;
 using System.Text.Json.Serialization;
 
-namespace MockAPI.Config;
+namespace AnomalyApi.Config;
 
 public record class OpenTelemetryConfig
 {

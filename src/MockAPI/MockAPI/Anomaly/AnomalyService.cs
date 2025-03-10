@@ -1,33 +1,53 @@
-using MockAPI.Anomaly;
-using MockAPI.Utils;
+﻿using AnomalyApi.Anomaly;
+using System.Threading.Tasks;
 
-namespace MockAPI.Services;
+namespace AnomalyApi.Anomaly;
 
 public class AnomalyService
 {
-    private readonly AnomalyRegistry _registry;
+    private static readonly AnomalyOptions DEFAULT_OPTIONS = new AnomalyOptions {
+        CauseException = false,
+        DelayMs = 0,
+        ExceptionRate = 0
+    };
 
-    public AnomalyService(AnomalyRegistry container) {
-        _registry = container;
+    private AnomalyOptions _anomalyOptions = DEFAULT_OPTIONS;
+
+    private readonly Random _random;
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="seed">Seed used for random anomaly generation</param>
+    public AnomalyService(int? seed = null) {
+        _random = seed is null ? new Random() : new Random(seed.Value);
     }
 
-    public async Task ExecuteSequentially(string route, bool randomOrder = false) {
-        var anomalies = _registry.GetAnomalies(route);
+    public AnomalyOptions GetAnomalyOptions() {
+        return _anomalyOptions;
+    }
 
-        var exceptions = new List<Exception>();
-        
-        foreach (RouteAnomaly anomaly in randomOrder ? anomalies.Shuffle() : anomalies) {
-            try { 
-                await anomaly.Execute();
-            } catch (Exception ex) {
-                exceptions.Add(ex);
+    public void UpdateAnomalyOptions(AnomalyOptions anomalyOptions) {
+        _anomalyOptions = anomalyOptions;
+    }
+
+    public void DisableAnomalies() {
+        _anomalyOptions = DEFAULT_OPTIONS;
+    }
+
+    public async Task Trigger() {
+        var randDouble = _random.NextDouble();
+
+        if (randDouble <= _anomalyOptions.ExceptionRate) {
+            if (_anomalyOptions.CauseException) {
+                throw new AnomalousException();
             }
         }
-    }
 
-    public async Task ExecuteParallel(string route, bool randomOrder = false) {
-        var anomalies = _registry.GetAnomalies(route);
-
-        await Task.WhenAll((randomOrder ? anomalies.Shuffle() : anomalies).Select(a => a.Execute()));
+        if (randDouble <= _anomalyOptions.DelayRate) {
+            if (_anomalyOptions.DelayMs > 0) {
+                await Task.Delay(_anomalyOptions.DelayMs);
+            }
+        }
     }
 }

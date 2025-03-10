@@ -1,7 +1,6 @@
-using MockAPI.Anomaly;
-using MockAPI.Config;
-using MockAPI.Services;
-using MockAPI.Utils;
+using AnomalyApi.Anomaly;
+using AnomalyApi.Config;
+using AnomalyApi.Utils;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using Serilog;
@@ -10,10 +9,18 @@ using System.Reflection;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddSingleton<AnomalyRegistry>();
 builder.Services.AddSingleton<AnomalyService>();
 
 builder.Services.AddControllers();
+
+builder.Services.AddCors(options => {
+    options.AddPolicy("default", policy => {
+        policy.AllowAnyOrigin();
+        policy.AllowAnyHeader();
+        policy.AllowAnyMethod();
+    });
+});
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -27,9 +34,15 @@ builder.Services.AddOpenTelemetry()
             serviceVersion: Assembly.GetExecutingAssembly().ImageRuntimeVersion))
     .WithMetrics(builder => builder
         .AddAspNetCoreInstrumentation()
-        .AddOtlpExporter(configure => {
+        .AddOtlpExporter((configure, metricReaderOptions) => {
             configure.Endpoint = new Uri(openTelemetryConfig.Endpoint);
-            configure.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+            //configure.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
+            //configure.ExportProcessorType = OpenTelemetry.ExportProcessorType.Simple;
+            configure.BatchExportProcessorOptions.ScheduledDelayMilliseconds = 500;
+            //configure.BatchExportProcessorOptions.MaxExportBatchSize = 64;
+
+            metricReaderOptions.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 2500;
+            metricReaderOptions.TemporalityPreference = MetricReaderTemporalityPreference.Delta;
         }));
             
         
@@ -57,6 +70,8 @@ if (app.Environment.IsDevelopment()) {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseCors("default");
 
 app.UseAuthorization();
 
