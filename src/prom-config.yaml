@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 15s     # Set the scrape interval to every 15 seconds
+  evaluation_interval: 15s # Evaluate rules every 15 seconds
+  scrape_timeout: 10s      # Scrape timeout after 10 seconds
+
+# Scrape configurations
+scrape_configs:
+  # OpenTelemetry Collector metrics
+  - job_name: 'otel-collector'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    static_configs:
+      - targets: ['otel:9001']
+    honor_labels: true
+    metric_relabel_configs:
+      # Optional: rename metrics with a prefix for clarity
+      # - source_labels: [__name__]
+      #   regex: '(.+)'
+      #   target_label: __name__
+      #   replacement: 'otel_$1'

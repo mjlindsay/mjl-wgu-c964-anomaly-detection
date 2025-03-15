@@ -4,14 +4,17 @@ services:
     ports:
       - 4318:4318
       - 4317:4317
+      - 4319:4319
+      - 4320:4320
+      - 9001:9001
     volumes:
       - type: bind
-        source: ./config.yaml
+        source: ./otel-config.yaml
         target: /etc/otelcol-contrib/config.yaml
         read_only: true
     depends_on:
       kafka:
-        condition: service_started
+        condition: service_healthy
         restart: true
   kafka:
     image: bitnami/kafka:latest
@@ -27,6 +30,12 @@ services:
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
   kafka-ui:
     container_name: kafka-ui
     image: provectuslabs/kafka-ui:latest
@@ -36,3 +45,19 @@ services:
       DYNAMIC_CONFIG_ENABLED: true
     volumes:
       - ./kui_config.yaml:/etc/kafkaui/dynamic_config.yaml
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prom-config.yaml:/etc/prometheus/prometheus.yml
+      - ./prometheus-data/:/prometheus
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-enterprise
+    ports:
+      - 9000:3000
+    volumes:
+      - ./grafana-data/:/var/lib/grafana
+      - ./grafana-config.ini:/etc/grafana/grafana.ini
