@@ -122,7 +122,7 @@ export default function AnomalyGenerator() {
     const totalCalls = Object.values(endpointStats).reduce((sum, stat) => sum + stat.calls, 0) || 1;
 
     return (
-        <Card className="w-full max-w-2xl mx-auto">
+        <Card className="w-full">
             <CardHeader>
                 <CardTitle>Anomaly Generator</CardTitle>
                 <CardDescription>
@@ -130,188 +130,184 @@ export default function AnomalyGenerator() {
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                {/* Endpoints List */}
-                <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Anomaly Setting</h3>
+                <div className="grid grid-cols-7 gap-4">
+                    <div className="col-span-3">
+                        <div id="request-control-panel" className="flex">
+                            <Label htmlFor="causeExceptionSwitch">Cause exceptions?</Label>
 
-                    <p className="font-small">These settings inject anomalies into the API. Any requests that are made after adjusting these settings will respond accordingly. For example, adjusting the delay will result in each request taking additional time, while toggling exceptions will change the response code of the API requests.</p>                
+                            <Switch
+                                className="ml-5"
+                                id="causeExceptionSwitch"
+                                checked={anomalyOptions.causeException}
+                                disabled={false}
+                                onCheckedChange={handleCauseExceptionToggle} />
+                        </div>
 
-                    <div className="flex">
-                        <Label htmlFor="causeExceptionSwitch">Cause exceptions?</Label>
+                        <div id="endpoint-defaults" className="flex mt-4">
+                            <Label htmlFor="delayMs">Delay (ms):</Label>
 
-                        <Switch
-                            className="ml-5"
-                            id="causeExceptionSwitch"
-                            checked={anomalyOptions.causeException}
-                            disabled={false}
-                            onCheckedChange={handleCauseExceptionToggle} />
-                    </div>
+                            <Input
+                                className="ml-5"
+                                id="delayMsInput"
+                                value={anomalyOptions.delay}
+                                onChange={updateDelayMs} />
+                        </div>
 
-                    <div className="flex mt-4">
-                        <Label htmlFor="delayMs">Delay (ms):</Label>
+                        {/* Request rate control */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium">Request Rate</label>
+                                <span className="text-sm font-medium">{rate} per second</span>
+                            </div>
+                            <Slider
+                                value={[rate]}
+                                min={1}
+                                max={100}
+                                step={1}
+                                onValueChange={(value) => setRate(value[0])}
+                                disabled={isRunning}
+                            />
+                        </div>
 
-                        <Input
-                            className="ml-5"
-                            id="delayMsInput"
-                            value={anomalyOptions.delay}
-                            onChange={updateDelayMs} />
-                    </div>
-
-                    <h3 className="text-sm font-medium">Endpoints</h3>
-
-                    {endpoints.map((endpoint, index) => (
-                        <div key={index} className="flex items-center space-x-2 p-2 bg-muted/50 rounded-md">
-                            <div className="flex-grow">
-                                <div className="flex gap-2 mb-1">
-                                    <Select
-                                        value={endpoint.method || 'GET'}
-                                        onValueChange={(value) => updateMethod(index, value)}
-                                        disabled={isRunning}
-                                    >
-                                        <SelectTrigger className="w-24">
-                                            <SelectValue placeholder="Method" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {HTTP_METHODS.map(method => (
-                                                <SelectItem key={method} value={method}>{method}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-
-                                    <Input
-                                        value={endpoint.url}
-                                        onChange={(e) => {
-                                            if (!isRunning) {
-                                                const newEndpoints = [...endpoints];
-                                                newEndpoints[index] = { ...endpoint, url: e.target.value };
-                                                setEndpoints(newEndpoints);
-                                            }
-                                        }}
-                                        disabled={isRunning}
-                                        className="flex-grow"
-                                    />
+                        {/* Status & Controls */}
+                        <div className="flex items-center justify-between bg-accent/30 p-3 rounded-md">
+                            <div>
+                                <div className="text-sm font-medium">
+                                    Status: <span className={isRunning ? "text-green-500" : "text-amber-500"}>
+                                        {isRunning ? "Running" : "Stopped"}
+                                    </span>
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                    <span className="text-xs text-muted-foreground w-24">Weight: {endpoint.weight}</span>
-                                    <Slider
-                                        value={[endpoint.weight]}
-                                        min={1}
-                                        max={10}
-                                        step={1}
-                                        disabled={isRunning}
-                                        onValueChange={(value) => updateWeight(index, value[0])}
-                                        className="flex-grow"
-                                    />
+                                <div className="text-sm">
+                                    Total: {callCount} calls ({errors} errors)
                                 </div>
-
-                                {/* Stats for this endpoint if available */}
-                                {endpointStats[endpoint.url] && endpointStats[endpoint.url].calls > 0 && (
-                                    <div className="mt-1 space-y-1">
-                                        <div className="flex justify-between text-xs">
-                                            <span>Calls: {endpointStats[endpoint.url].calls}</span>
-                                            <span>Errors: {endpointStats[endpoint.url].errors}</span>
-                                            <span>{Math.round((endpointStats[endpoint.url].calls / totalCalls) * 100)}%</span>
-                                        </div>
-                                        <Progress
-                                            value={(endpointStats[endpoint.url].calls / totalCalls) * 100}
-                                            className="h-1"
-                                        />
-                                    </div>
-                                )}
                             </div>
 
                             <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeEndpoint(index)}
-                                disabled={isRunning || endpoints.length <= 1}
+                                onClick={handleToggle}
+                                variant={isRunning ? "destructive" : "default"}
+                                className="gap-2"
                             >
-                                <Trash className="h-4 w-4" />
+                                {isRunning ? (
+                                    <>
+                                        <Pause className="h-4 w-4" /> Stop
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="h-4 w-4" /> Start
+                                    </>
+                                )}
                             </Button>
-                        </div>
-                    ))}
-
-                    {/* Add new endpoint */}
-                    {!isRunning && (
-                        <div className="flex space-x-2 mt-2">
-                            <Select
-                                value={newMethod}
-                                onValueChange={setNewMethod}>
-
-                                <SelectTrigger className="w-24">
-                                    <SelectValue placeholder="Method" />
-                                </SelectTrigger>
-
-                                <SelectContent>
-                                    {HTTP_METHODS.map(method => (
-                                        <SelectItem key={method} value={method}>{method}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            <Input
-                                value={newUrl}
-                                onChange={(e) => setNewUrl(e.target.value)}
-                                placeholder="Enter new endpoint URL"
-                                className="flex-grow"
-                            />
-                            
-                            <Textarea
-                                value={newBody}
-                                onChange={(e) => setNewBody(e.target.value)}
-                                placeholder="request body (json)" className="flex-grow" />
-
-                            <Button onClick={addEndpoint} disabled={!newUrl.trim()}>
-                                <Plus className="h-4 w-4 mr-1" /> Add
-                            </Button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Request rate control */}
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                        <label className="text-sm font-medium">Request Rate</label>
-                        <span className="text-sm font-medium">{rate} per second</span>
-                    </div>
-                    <Slider
-                        value={[rate]}
-                        min={1}
-                        max={100}
-                        step={1}
-                        onValueChange={(value) => setRate(value[0])}
-                        disabled={isRunning}
-                    />
-                </div>
-
-                {/* Status & Controls */}
-                <div className="flex items-center justify-between bg-accent/30 p-3 rounded-md">
-                    <div>
-                        <div className="text-sm font-medium">
-                            Status: <span className={isRunning ? "text-green-500" : "text-amber-500"}>
-                                {isRunning ? "Running" : "Stopped"}
-                            </span>
-                        </div>
-                        <div className="text-sm">
-                            Total: {callCount} calls ({errors} errors)
                         </div>
                     </div>
 
-                    <Button
-                        onClick={handleToggle}
-                        variant={isRunning ? "destructive" : "default"}
-                        className="gap-2"
-                    >
-                        {isRunning ? (
-                            <>
-                                <Pause className="h-4 w-4" /> Stop
-                            </>
-                        ) : (
-                            <>
-                                <Play className="h-4 w-4" /> Start
-                            </>
+                    <div className="col-span-4">
+                        {endpoints.map((endpoint, index) => (
+                            <div key={index} className="flex items-center space-x-2 p-2 bg-muted/50 rounded-md">
+                                <div className="flex-grow">
+                                    <div className="flex gap-2 mb-1">
+                                        <Select
+                                            value={endpoint.method || 'GET'}
+                                            onValueChange={(value) => updateMethod(index, value)}
+                                            disabled={isRunning}
+                                        >
+                                            <SelectTrigger className="w-24">
+                                                <SelectValue placeholder="Method" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {HTTP_METHODS.map(method => (
+                                                    <SelectItem key={method} value={method}>{method}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        <Input
+                                            value={endpoint.url}
+                                            onChange={(e) => {
+                                                if (!isRunning) {
+                                                    const newEndpoints = [...endpoints];
+                                                    newEndpoints[index] = { ...endpoint, url: e.target.value };
+                                                    setEndpoints(newEndpoints);
+                                                }
+                                            }}
+                                            disabled={isRunning}
+                                            className="flex-grow"
+                                        />
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <span className="text-xs text-muted-foreground w-24">Weight: {endpoint.weight}</span>
+                                        <Slider
+                                            value={[endpoint.weight]}
+                                            min={1}
+                                            max={10}
+                                            step={1}
+                                            disabled={isRunning}
+                                            onValueChange={(value) => updateWeight(index, value[0])}
+                                            className="flex-grow"
+                                        />
+                                    </div>
+
+                                    {/* Stats for this endpoint if available */}
+                                    {endpointStats[endpoint.url] && endpointStats[endpoint.url].calls > 0 && (
+                                        <div className="mt-1 space-y-1">
+                                            <div className="flex justify-between text-xs">
+                                                <span>Calls: {endpointStats[endpoint.url].calls}</span>
+                                                <span>Errors: {endpointStats[endpoint.url].errors}</span>
+                                                <span>{Math.round((endpointStats[endpoint.url].calls / totalCalls) * 100)}%</span>
+                                            </div>
+                                            <Progress
+                                                value={(endpointStats[endpoint.url].calls / totalCalls) * 100}
+                                                className="h-1"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeEndpoint(index)}
+                                    disabled={isRunning || endpoints.length <= 1}
+                                >
+                                    <Trash className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ))}
+
+                        {!isRunning && (
+                            <div className="flex space-x-2 mt-2">
+                                <Select
+                                    value={newMethod}
+                                    onValueChange={setNewMethod}>
+
+                                    <SelectTrigger className="w-24">
+                                        <SelectValue placeholder="Method" />
+                                    </SelectTrigger>
+
+                                    <SelectContent>
+                                        {HTTP_METHODS.map(method => (
+                                            <SelectItem key={method} value={method}>{method}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                <Input
+                                    value={newUrl}
+                                    onChange={(e) => setNewUrl(e.target.value)}
+                                    placeholder="Enter new endpoint URL"
+                                    className="flex-grow"
+                                />
+
+                                <Textarea
+                                    value={newBody}
+                                    onChange={(e) => setNewBody(e.target.value)}
+                                    placeholder="request body (json)" className="flex-grow" />
+
+                                <Button onClick={addEndpoint} disabled={!newUrl.trim()}>
+                                    <Plus className="h-4 w-4 mr-1" /> Add
+                                </Button>
+                            </div>
                         )}
-                    </Button>
+                    </div>
                 </div>
             </CardContent>
         </Card>
