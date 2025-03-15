@@ -1,0 +1,47 @@
+receivers:
+  otlp/dotnet:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  otlp/python:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4319
+      http:
+        endpoint: 0.0.0.0:4320
+
+processors:
+  cumulativetodelta:
+    include:
+      metric_types:
+        - sum
+        - histogram
+  batch:
+
+exporters:
+  debug:
+    verbosity: detailed
+  kafka:
+    brokers:
+      - kafka:9092
+    protocol_version: 2.0.0
+    encoding: otlp_json
+  prometheus:
+    endpoint: "0.0.0.0:9001"
+
+service:
+  pipelines:
+    # logs:
+    #   receivers: [otlp]
+    #   processors: [batch]
+    #   exporters: [debug, kafka]
+    metrics/dotnet:
+      receivers: [otlp/dotnet]
+      processors: [cumulativetodelta]
+      exporters: [debug, kafka, prometheus]
+    metrics/python:
+      receivers: [otlp/python]
+      processors: [cumulativetodelta]
+      exporters: [debug, prometheus]
