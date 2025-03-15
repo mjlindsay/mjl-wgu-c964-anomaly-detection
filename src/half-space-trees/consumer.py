@@ -7,6 +7,15 @@ from confluent_kafka import Consumer
 from river import preprocessing, metrics, datasets, compose, anomaly
 from csv import writer
 
+from opentelemetry import metrics
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import (
+    PeriodicExportingMetricReader
+)
+
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
+    OTLPMetricExporter
+)
 parser = argparse.ArgumentParser(
     description='Anomaly detection using Half-Space Trees'
 )
@@ -25,6 +34,19 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(
+    endpoint="http://127.0.0.1:4319",
+    insecure=True
+), export_interval_millis=2000)
+provider = MeterProvider(metric_readers=[metric_reader])
+
+metrics.set_meter_provider(provider)
+
+anomaly_meter = metrics.get_meter("anomaly.hst")
+total_record_count_metric = anomaly_meter.create_counter("record_count")
+anomalous_record_count_metric = anomaly_meter.create_counter("anomalous_record_count")
+nominal_record_count_metric = anomaly_meter.create_counter("nominal_record_count")
 
 def write_stage(stage_name, dict):
     if not args.stage_output:
@@ -108,49 +130,47 @@ def extract_request_duration_features(metric_name, metric):
     return features
 
 # Setup ML Model
-scaler = preprocessing.MinMaxScaler()
+scaler = preprocessing.StandardScaler()
 half_space_trees = anomaly.HalfSpaceTrees(
     n_trees=10,
     height=3,
     window_size=1000,
     seed=10427
 )
-filter = anomaly.QuantileFilter(q = 0.95, anomaly_detector=half_space_trees)
+#filter = anomaly.QuantileFilter(q = 0.6, anomaly_detector=half_space_trees)
+filter = anomaly.ThresholdFilter(half_space_trees, 0.6)
 
 model = compose.Pipeline(
     scaler,
     filter
 )
 
-accuracy = metrics.Accuracy()
+def load_baseline_data():
+    print("Loading training data...")
+    with open('training_data.json') as f:
+        training_data = json.load(f)
 
-def do_anomaly_detection(features: dict):
-    # Anomaly detection!
+        for record in training_data:
+            model.learn_one(record)
+
+def detect_anomaly(features) -> bool:
     model.learn_one(features)
     score = model.score_one(features)
-    is_anomaly = model['QuantileFilter'].classify(score)
+    is_anomaly = model["ThresholdFilter"].classify(score)
+
+    total_record_count_metric.add(1)
+    if is_anomaly:
+        anomalous_record_count_metric.add(1)
+    else:
+        nominal_record_count_metric.add(1)
 
     print(f"Features: {features}, Score: {score}, Anomaly: {is_anomaly}")
 
 training_data_buffer = []
-def record_training_data(features: dict):    
-    is_anomaly = False
-
-    for feature_key, feature_value in features.items():
-        if "status_code" in feature_key:
-            if feature_value >= 300:
-                is_anomaly = True
-                break
-        if "avg_duration" in feature_key:
-            if feature_value >= .275:
-                is_anomaly = True
-                break
-    
-    features = features | { is_anomaly: is_anomaly }
-
+def process_training_record(features: dict):    
     training_data_buffer.append(features)
 
-    if len(training_data_buffer) >= 1500:
+    if len(training_data_buffer) >= 1000:
         timestamp = datetime.datetime.now().strftime('%H-%M-%S-%f')
 
         with open(f'training_data_{timestamp}.json', 'w') as f:
@@ -174,6 +194,9 @@ if __name__ == '__main__':
     # Subscribe to topic
     topic = "otlp_metrics"
     consumer.subscribe([topic])
+
+    if not args.training:
+        load_baseline_data()
 
     # Poll for new messages from Kafka and print them.
     try:
@@ -199,9 +222,9 @@ if __name__ == '__main__':
                 write_stage('manual', manually_transformed_features)
 
                 if args.training:
-                    record_training_data(manually_transformed_features)
+                    process_training_record(manually_transformed_features)
                 else:
-                    do_anomaly_detection(manually_transformed_features)
+                    detect_anomaly(manually_transformed_features)
     except KeyboardInterrupt:
         pass
     finally:
