@@ -41,7 +41,7 @@ builder.Services.AddOpenTelemetry()
             configure.BatchExportProcessorOptions.ScheduledDelayMilliseconds = 500;
             //configure.BatchExportProcessorOptions.MaxExportBatchSize = 64;
 
-            metricReaderOptions.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 2500;
+            metricReaderOptions.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 5000;
             metricReaderOptions.TemporalityPreference = MetricReaderTemporalityPreference.Delta;
         }));
             
