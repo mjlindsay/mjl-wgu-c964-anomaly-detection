@@ -47,7 +47,7 @@ anomaly_meter = metrics.get_meter("anomaly.hst")
 total_record_count_metric = anomaly_meter.create_counter("record_count")
 anomalous_record_count_metric = anomaly_meter.create_counter("anomalous_record_count")
 nominal_record_count_metric = anomaly_meter.create_counter("nominal_record_count")
-
+anomaly_score_distribution = anomaly_meter.create_histogram("anomaly_score_dist")
 def write_stage(stage_name, dict):
     if not args.stage_output:
         return
@@ -158,6 +158,7 @@ def detect_anomaly(features) -> bool:
     score = model.score_one(features)
     is_anomaly = model["ThresholdFilter"].classify(score)
 
+    anomaly_score_distribution.record(score)
     total_record_count_metric.add(1)
     if is_anomaly:
         anomalous_record_count_metric.add(1)

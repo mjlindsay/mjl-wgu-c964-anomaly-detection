@@ -20,7 +20,7 @@ model = compose.Pipeline(
 )
 
 def learn_many_predict_many():
-    with open('training_data.json') as f:
+    with open('dist_training_data.json') as f:
         training_data = json.load(f)
 
         classified_data = []
@@ -36,12 +36,12 @@ def learn_many_predict_many():
                 "is_anomaly": anomaly
             })
 
-        with open('tmpm_classified.json', 'w') as cf:
+        with open('dist_tmpm_classified.json', 'w') as cf:
             json.dump(classified_data, cf)
 
 
 def learn_one_predict_one():
-    with open('training_data.json') as f:
+    with open('dist_training_data.json') as f:
         training_data = json.load(f)
 
         classified_data = []
@@ -60,7 +60,7 @@ def learn_one_predict_one():
             #     "score": score
             # })
         
-        with open('l1p1.json', 'w') as cf:
+        with open('dist_l1p1.json', 'w') as cf:
             json.dump(classified_data, cf, indent=4)
 
 learn_one_predict_one()
