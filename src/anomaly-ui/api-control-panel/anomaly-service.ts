@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 export interface AnomalyOptions {
     causeException: boolean;
-    delayMs: number;          // renamed from delayMs for consistency with API
+    meanDelayMs: number;
     exceptionRate: number;
     delayRate: number;
 }

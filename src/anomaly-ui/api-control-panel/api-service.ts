@@ -14,6 +14,7 @@ interface ApiServiceOptions {
   endpoints: ApiEndpoint[];
   requestsPerSecond: number;
   enabled: boolean;
+  maxConcurrentRequests?: number;
   onSuccess?: (data: any, method: string, url: string) => void;
   onError?: (error: any, method: string, url: string) => void;
   headers?: Record<string, string>;
@@ -24,6 +25,7 @@ export function useApiService(options: ApiServiceOptions) {
     endpoints,
     requestsPerSecond = 1,
     enabled = false,
+    maxConcurrentRequests = 10, // Limit concurrent requests
     onSuccess,
     onError,
     headers = {},
@@ -35,7 +37,11 @@ export function useApiService(options: ApiServiceOptions) {
   const [endpointStats, setEndpointStats] = useState<
     Record<string, { calls: number; errors: number }>
   >({});
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Keep track of in-flight requests to manage concurrency
+  const activeRequestsRef = useRef<number>(0);
+  const schedulerRef = useRef<NodeJS.Timeout | null>(null);
+  const shouldContinueRef = useRef<boolean>(false);
 
   // Calculate delay in ms between requests
   const delay = Math.max(Math.floor(1000 / requestsPerSecond), 100);
@@ -66,7 +72,6 @@ export function useApiService(options: ApiServiceOptions) {
       random -= weight;
     }
 
-    // Fallback to first endpoint (shouldn't normally reach here)
     return endpoints[0];
   };
 
@@ -83,26 +88,36 @@ export function useApiService(options: ApiServiceOptions) {
   };
 
   const makeApiCall = async () => {
-    if (endpoints.length === 0) return;
-
-    const selectedEndpoint = selectEndpoint();
-    const fullUrl = buildUrl(selectedEndpoint);
-
+    if (endpoints.length === 0 || !shouldContinueRef.current) return;
+    
+    // Increment active requests counter
+    activeRequestsRef.current += 1;
+    
     try {
+      const selectedEndpoint = selectEndpoint();
+      const fullUrl = buildUrl(selectedEndpoint);
+
+      // Use AbortController to support request cancellation if needed
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
       const response = await fetch(fullUrl, {
-        method: selectedEndpoint.method || "GET", // Use specified method or default to GET
+        method: selectedEndpoint.method || "GET",
         headers: {
           "Content-Type": "application/json",
           ...headers,
         },
-        body: selectedEndpoint.body
+        body: selectedEndpoint.body ? selectedEndpoint.body : undefined,
+        signal: controller.signal,
       });
 
-      const data = await response.text();
-      setCallCount((prev) => prev + 1);
+      clearTimeout(timeoutId);
 
-      // Update stats for this endpoint
-      setEndpointStats((prev) => ({
+      const data = await response.text();
+      
+      // Update stats using functional updates to avoid race conditions
+      setCallCount(prev => prev + 1);
+      setEndpointStats(prev => ({
         ...prev,
         [selectedEndpoint.url]: {
           calls: (prev[selectedEndpoint.url]?.calls || 0) + 1,
@@ -112,38 +127,81 @@ export function useApiService(options: ApiServiceOptions) {
 
       if (onSuccess) onSuccess(data, selectedEndpoint.method, selectedEndpoint.url);
       return data;
-    } catch (error) {
-      setErrors((prev) => prev + 1);
+    } catch (error: any) {
+      // Only count as error if not aborted
+      if (error.name !== 'AbortError') {
+        setErrors(prev => prev + 1);
+        
+        const selectedEndpoint = selectEndpoint();
+        setEndpointStats(prev => ({
+          ...prev,
+          [selectedEndpoint.url]: {
+            calls: prev[selectedEndpoint.url]?.calls || 0,
+            errors: (prev[selectedEndpoint.url]?.errors || 0) + 1,
+          },
+        }));
+        
+        if (onError) onError(error, selectedEndpoint.method, selectedEndpoint.url);
+        console.error(`API call failed:`, error);
+      }
+    } finally {
+      // Decrement active requests counter
+      activeRequestsRef.current -= 1;
+      
+      // If we're still running and below concurrency limit, schedule next request
+      if (shouldContinueRef.current && activeRequestsRef.current < maxConcurrentRequests) {
+        scheduleNextRequest();
+      }
+    }
+  };
 
-      // Update error stats for this endpoint
-      setEndpointStats((prev) => ({
-        ...prev,
-        [selectedEndpoint.url]: {
-          calls: prev[selectedEndpoint.url]?.calls || 0,
-          errors: (prev[selectedEndpoint.url]?.errors || 0) + 1,
-        },
-      }));
-
-      if (onError) onError(error, selectedEndpoint.method, selectedEndpoint.url);
-      console.error(`API call failed for ${selectedEndpoint.url}:`, error);
+  // Schedule the next request based on the configured rate
+  const scheduleNextRequest = () => {
+    if (!shouldContinueRef.current) return;
+    
+    // Only schedule a new request if we're below the concurrency limit
+    if (activeRequestsRef.current < maxConcurrentRequests) {
+      // Use setTimeout instead of setInterval for more precise control
+      schedulerRef.current = setTimeout(() => {
+        // Start the request (non-blocking)
+        makeApiCall().catch(console.error);
+        
+        // Immediately schedule the next request if we're below concurrency limit
+        if (shouldContinueRef.current && activeRequestsRef.current < maxConcurrentRequests) {
+          scheduleNextRequest();
+        }
+      }, delay);
     }
   };
 
   const startService = () => {
-    if (intervalRef.current) return;
-
+    if (shouldContinueRef.current) return;
+    
     setIsRunning(true);
-    intervalRef.current = setInterval(makeApiCall, delay);
+    shouldContinueRef.current = true;
+    activeRequestsRef.current = 0;
+    
+    // Start with multiple concurrent requests up to the limit
+    const initialBatch = Math.min(maxConcurrentRequests, 3); // Start with a few requests
+    
+    for (let i = 0; i < initialBatch; i++) {
+      scheduleNextRequest();
+    }
+    
     console.log(
-      `API service started - ${requestsPerSecond} requests/second across ${endpoints.length} endpoints`
+      `API service started - target ${requestsPerSecond} req/sec, max ${maxConcurrentRequests} concurrent requests`
     );
   };
 
   const stopService = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    shouldContinueRef.current = false;
+    
+    // Clear any scheduled requests
+    if (schedulerRef.current) {
+      clearTimeout(schedulerRef.current);
+      schedulerRef.current = null;
     }
+    
     setIsRunning(false);
     console.log(
       `API service stopped after ${callCount} calls with ${errors} errors`
@@ -159,11 +217,17 @@ export function useApiService(options: ApiServiceOptions) {
     }
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      shouldContinueRef.current = false;
+      if (schedulerRef.current) {
+        clearTimeout(schedulerRef.current);
       }
     };
   }, [enabled]);
+
+  // Single call function for manual triggering
+  const triggerSingleCall = () => {
+    return makeApiCall();
+  };
 
   return {
     isRunning,
@@ -172,6 +236,6 @@ export function useApiService(options: ApiServiceOptions) {
     endpointStats,
     startService,
     stopService,
-    makeApiCall, // Expose single call for manual triggering
+    makeApiCall: triggerSingleCall, // Expose single call for manual triggering
   };
 }
