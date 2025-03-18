@@ -3,6 +3,7 @@ using AnomalyApi.Config;
 using AnomalyApi.Utils;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Serilog;
 using System.Reflection;
 
@@ -32,17 +33,19 @@ builder.Services.AddOpenTelemetry()
         resource.AddService(
             serviceName: "MockAPI",
             serviceVersion: Assembly.GetExecutingAssembly().ImageRuntimeVersion))
-    .WithMetrics(builder => builder
+    .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
         .AddOtlpExporter((configure, metricReaderOptions) => {
             configure.Endpoint = new Uri(openTelemetryConfig.Endpoint);
-            //configure.Protocol = OpenTelemetry.Exporter.OtlpExportProtocol.Grpc;
-            //configure.ExportProcessorType = OpenTelemetry.ExportProcessorType.Simple;
             configure.BatchExportProcessorOptions.ScheduledDelayMilliseconds = 500;
-            //configure.BatchExportProcessorOptions.MaxExportBatchSize = 64;
 
-            metricReaderOptions.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 5000;
+            metricReaderOptions.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 2500;
             metricReaderOptions.TemporalityPreference = MetricReaderTemporalityPreference.Delta;
+        }))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddOtlpExporter(config => {
+            config.Endpoint = new Uri(openTelemetryConfig.Endpoint);
         }));
             
         
