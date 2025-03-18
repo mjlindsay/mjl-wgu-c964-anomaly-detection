@@ -3,14 +3,19 @@
 import argparse
 import datetime
 import json
+import numbers
 from confluent_kafka import Consumer
 from river import preprocessing, metrics, datasets, compose, anomaly
 from csv import writer
 
 from opentelemetry import metrics
-from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics import (
+    MeterProvider,
+    Histogram
+)
 from opentelemetry.sdk.metrics.export import (
-    PeriodicExportingMetricReader
+    PeriodicExportingMetricReader,
+    AggregationTemporality
 )
 
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
@@ -37,7 +42,8 @@ args = parser.parse_args()
 
 metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(
     endpoint="http://127.0.0.1:4319",
-    insecure=True
+    insecure=True,
+    preferred_temporality={Histogram: AggregationTemporality.DELTA}
 ), export_interval_millis=2000)
 provider = MeterProvider(metric_readers=[metric_reader])
 
@@ -47,7 +53,19 @@ anomaly_meter = metrics.get_meter("anomaly.hst")
 total_record_count_metric = anomaly_meter.create_counter("record_count")
 anomalous_record_count_metric = anomaly_meter.create_counter("anomalous_record_count")
 nominal_record_count_metric = anomaly_meter.create_counter("nominal_record_count")
-anomaly_score_distribution = anomaly_meter.create_histogram("anomaly_score_dist")
+model_accuracy_gauge = anomaly_meter.create_gauge("anomaly_model_accuracy")
+
+anomaly_score_distribution = anomaly_meter.create_histogram(
+    "anomaly_score_dist", 
+    description="Distribution of anomaly scores from 0 (normal) to 1 (anomalous)",
+    explicit_bucket_boundaries_advisory=[
+        0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 
+        0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1
+    ]
+)
+
+anomaly_score_value = anomaly_meter.create_gauge("anomaly_score")
+
 def write_stage(stage_name, dict):
     if not args.stage_output:
         return
@@ -72,7 +90,10 @@ def extract_metric_features(data):
     # except:
     #     print("uh oh")
     
-    return flattened_features
+    if flattened_features == {}:
+        return None
+    else:
+        return flattened_features
 
 # Define a map of http methods to integer values. We could use
 # a preprocessor to do this, but it's a finite number of values
@@ -117,7 +138,7 @@ def extract_request_duration_features(metric_name, metric):
             avg_duration = total_duration / count
 
         method = dict_attributes['http.request.method']['stringValue']
-        status_code = int(dict_attributes['http.response.status_code']['intValue'])
+        status_code = dict_attributes['http.response.status_code']['intValue']
 
         route_feature_key = f'{method}.{status_code}.{route}'
         features = features | {
@@ -130,15 +151,23 @@ def extract_request_duration_features(metric_name, metric):
     return features
 
 # Setup ML Model
-scaler = preprocessing.StandardScaler()
 half_space_trees = anomaly.HalfSpaceTrees(
     n_trees=10,
     height=3,
     window_size=1000,
     seed=10427
 )
-#filter = anomaly.QuantileFilter(q = 0.6, anomaly_detector=half_space_trees)
-filter = anomaly.ThresholdFilter(half_space_trees, 0.6)
+
+# encoders for categorical and numerical data
+cat = compose.SelectType(str) | preprocessing.OneHotEncoder()
+num = compose.SelectType(numbers.Number) | preprocessing.StandardScaler()
+scaler = (cat + num)
+
+# filter = anomaly.QuantileFilter(
+#     q = 0.95,
+#     anomaly_detector=half_space_trees,
+#     protect_anomaly_detector=False)
+filter = anomaly.ThresholdFilter(half_space_trees, 0.8)
 
 model = compose.Pipeline(
     scaler,
@@ -147,7 +176,7 @@ model = compose.Pipeline(
 
 def load_baseline_data():
     print("Loading training data...")
-    with open('training_data.json') as f:
+    with open('dist_cat_training_data.json') as f:
         training_data = json.load(f)
 
         for record in training_data:
@@ -156,9 +185,11 @@ def load_baseline_data():
 def detect_anomaly(features) -> bool:
     model.learn_one(features)
     score = model.score_one(features)
-    is_anomaly = model["ThresholdFilter"].classify(score)
+    is_anomaly = model['ThresholdFilter'].classify(score)
+    # is_anomaly = filter.classify(score)
 
     anomaly_score_distribution.record(score)
+
     total_record_count_metric.add(1)
     if is_anomaly:
         anomalous_record_count_metric.add(1)
@@ -220,6 +251,11 @@ if __name__ == '__main__':
                 write_stage('raw', data)
                 
                 manually_transformed_features = extract_metric_features(data)
+
+                # We don't want to handle data that we couldn't extract meaningful features from.
+                if (manually_transformed_features is None):
+                    continue
+                
                 write_stage('manual', manually_transformed_features)
 
                 if args.training:
