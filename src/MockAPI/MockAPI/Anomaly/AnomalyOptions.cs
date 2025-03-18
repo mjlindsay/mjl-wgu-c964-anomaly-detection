@@ -6,7 +6,9 @@ public record class AnomalyOptions
 {
     public bool CauseException { get; set; } = false;
 
-    public int DelayMs { get; set; } = 0;
+    public int MeanDelayMs { get; set; } = 0;
+
+    public double StdDevMs { get => (MeanDelayMs * 2) / 5; }
 
     [Range(0, 1)]
     public float ExceptionRate { get; set; } = 0f;

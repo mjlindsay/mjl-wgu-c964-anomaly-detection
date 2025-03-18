@@ -1,4 +1,5 @@
 ﻿using AnomalyApi.Anomaly;
+using AnomalyApi.Utils;
 using System.Threading.Tasks;
 
 namespace AnomalyApi.Anomaly;
@@ -7,7 +8,7 @@ public class AnomalyService
 {
     private static readonly AnomalyOptions DEFAULT_OPTIONS = new AnomalyOptions {
         CauseException = false,
-        DelayMs = 0,
+        MeanDelayMs = 0,
         ExceptionRate = 0
     };
 
@@ -45,8 +46,9 @@ public class AnomalyService
         }
 
         if (randDouble <= _anomalyOptions.DelayRate) {
-            if (_anomalyOptions.DelayMs > 0) {
-                await Task.Delay(_anomalyOptions.DelayMs);
+            if (_anomalyOptions.MeanDelayMs > 0) {
+                var delay = Math.Max(_random.NextGaussianDouble(_anomalyOptions.MeanDelayMs, _anomalyOptions.StdDevMs), 0);
+                await Task.Delay((int) Math.Floor(delay));
             }
         }
     }
