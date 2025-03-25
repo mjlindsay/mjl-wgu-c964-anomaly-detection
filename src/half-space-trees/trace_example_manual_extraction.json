@@ -1,0 +1,7 @@
+{
+    "request_method": 0,
+    "error_type": "AnomalyApi.Anomaly.AnomalousException",
+    "route": "api/User",
+    "status_code": "500",
+    "duration": 531.9398
+}
