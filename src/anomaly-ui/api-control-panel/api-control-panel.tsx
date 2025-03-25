@@ -30,9 +30,9 @@ export default function ApiControlPanel() {
     const { updateAnomalySettings, getAnomalySettings } = useAnomalyService();
     const [options, setOptions] = useState({
         causeException: false,
-        meanDelayMs: 0,
+        targetDelayMs: 300,
         exceptionRate: 0.1,
-        delayRate: 0.5
+        delayRate: 1.0
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitResult, setSubmitResult] = useState<{ success: boolean, message: string } | null>(null);
@@ -75,10 +75,10 @@ export default function ApiControlPanel() {
         })
     }
 
-    const handleChangeDelay = (meanDelayMs: number) => {
+    const handleChangeDelay = (targetDelayMs: number) => {
         setOptions({
             ...options,
-            meanDelayMs: meanDelayMs
+            targetDelayMs: targetDelayMs
         })
     }
 
@@ -230,21 +230,21 @@ export default function ApiControlPanel() {
                                 {/* Delay Settings */}
                                 <div className="space-y-4">
                                     <div>
-                                        <Label htmlFor="delayInput">Mean Delay (milliseconds)</Label>
+                                        <Label htmlFor="delayInput">Target Delay (milliseconds)</Label>
                                         <div className="flex items-center mt-1 gap-2">
                                             <Input
                                                 id="delayInput"
                                                 type="number"
                                                 min={0}
                                                 max={10000}
-                                                value={options.meanDelayMs}
-                                                onChange={(e) => setOptions({ ...options, meanDelayMs: parseInt(e.target.value) || 0 })}
+                                                value={options.targetDelayMs}
+                                                onChange={(e) => setOptions({ ...options, targetDelayMs: parseInt(e.target.value) || 0 })}
                                                 className="w-32"
                                             />
                                             <span className="text-sm text-muted-foreground">ms</span>
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            The mean amount of artificial delay to add to API responses. Actual delays will be distributed along a bell curve.
+                                            The target amount of delay if an endpoint triggers an anomaly. Actual delays will be randomized based on this target and may be skewed.
                                         </p>
                                     </div>
 
@@ -259,8 +259,8 @@ export default function ApiControlPanel() {
                                             min={1}
                                             max={100}
                                             step={1}
-                                            disabled={options.meanDelayMs === 0}
-                                            className={options.meanDelayMs === 0 ? "opacity-50" : ""}
+                                            disabled={options.targetDelayMs === 0}
+                                            className={options.targetDelayMs === 0 ? "opacity-50" : ""}
                                             onValueChange={(value) => setOptions({ ...options, delayRate: value[0] / 100 })}
                                         />
                                         <p className="text-xs text-muted-foreground">
