@@ -716,3 +716,4 @@ cython_debug/
 
 grafana-data/
 prometheus-data/
+tempo-data/
