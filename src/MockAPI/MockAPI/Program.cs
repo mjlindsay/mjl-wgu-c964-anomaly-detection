@@ -31,7 +31,7 @@ var openTelemetryConfig = builder.RegisterConfig<OpenTelemetryConfig>();
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource =>
         resource.AddService(
-            serviceName: "MockAPI",
+            serviceName: "AnomalyApi",
             serviceVersion: Assembly.GetExecutingAssembly().ImageRuntimeVersion))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
@@ -43,9 +43,26 @@ builder.Services.AddOpenTelemetry()
             metricReaderOptions.TemporalityPreference = MetricReaderTemporalityPreference.Delta;
         }))
     .WithTracing(tracing => tracing
-        .AddAspNetCoreInstrumentation()
+        .AddSource("anomaly-api")
+        .AddAspNetCoreInstrumentation(o => {
+            o.EnrichWithHttpRequest = (activity, request) => {
+                activity.SetTag("request.contentLength", request.ContentLength);
+            };
+
+            o.EnrichWithHttpResponse = (activity, response) => {
+                activity.SetTag("response.statusCode", response.StatusCode);
+                activity.SetTag("response.duration", activity.Duration.TotalMilliseconds);
+            };
+
+            o.EnrichWithException = (activity, exception) => {
+                if (exception.Source is not null) {
+                    activity.SetTag("exception.source", exception.Source);
+                }
+            };
+        })
         .AddOtlpExporter(config => {
             config.Endpoint = new Uri(openTelemetryConfig.Endpoint);
+            config.ExportProcessorType = OpenTelemetry.ExportProcessorType.Simple;
         }));
             
         
