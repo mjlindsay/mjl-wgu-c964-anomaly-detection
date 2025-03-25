@@ -30,6 +30,10 @@ exporters:
     encoding: otlp_json
   prometheus:
     endpoint: "0.0.0.0:9001"
+  otlp/tempo:
+    endpoint: tempo:4321
+    tls:
+      insecure: true
 
 service:
   pipelines:
@@ -40,8 +44,14 @@ service:
     metrics/dotnet:
       receivers: [otlp/dotnet]
       processors: [cumulativetodelta]
-      exporters: [debug, kafka, prometheus]
+      exporters: [kafka, prometheus]
+    traces/dotnet:
+      receivers: [otlp/dotnet]
+      exporters: [debug, kafka, otlp/tempo]
+    traces/python:
+      receivers: [otlp/python]
+      exporters: [debug, otlp/tempo]
     metrics/python:
       receivers: [otlp/python]
       processors: [cumulativetodelta]
-      exporters: [debug, prometheus]
+      exporters: [prometheus]

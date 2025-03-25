@@ -55,9 +55,55 @@ services:
       - ./prometheus-data/:/prometheus
   grafana:
     container_name: grafana
-    image: grafana/grafana-enterprise
+    image: &grafanaImage grafana/grafana-enterprise
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
     ports:
-      - 9000:3000
+      - 9000:9000
     volumes:
       - ./grafana-data/:/var/lib/grafana
       - ./grafana-config.ini:/etc/grafana/grafana.ini
+      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./grafana-dashboard-provisioning.yaml:/etc/grafana/provisioning/dashboards/main.yaml
+      - ./grafana-dashboards/:/var/lib/grafana/dashboards
+  grafana-provisioning:
+    container_name: grafana-provisioning
+    image: alpine/curl
+    entrypoint:
+      - sh
+      - -c
+      - |
+        sleep 15 && # Give Grafana time to fully initialize
+        curl -v \
+          --request POST \
+          --url http://grafana:9000/api/dashboards/uid/cefo8i1m8lon4a/public-dashboards/ \
+          --header "content-type: application/json" \
+          --data '{"uid": "00000000-0000-0000-0000-000000000000","accessToken": "a61e3b49d6ac45a1a6e94a2f9d43548c","isEnabled": true,"timeSelectionEnabled": true}'
+    depends_on:
+      grafana:
+        condition: service_healthy
+        restart: true
+  tempo-init:
+    image: &tempoImage grafana/tempo:latest
+    user: root
+    entrypoint:
+      - "chown"
+      - "10001:10001"
+      - "/var/tempo"
+    volumes:
+      - ./tempo-data:/var/tempo
+  tempo:
+    image: *tempoImage
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo.yaml
+      - ./tempo-data:/var/tempo
+    ports:
+      - "3200:3200" # tempo
+      - "4321:4321" # otlp grpc
+    depends_on:
+      - tempo-init
