@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useApiService, ApiEndpoint } from '@/request-generator/api-service';
+import { useApiService, ApiEndpoint } from '@/api-control-panel/api-service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -22,8 +22,15 @@ import { Trash, Plus, Play, Pause, AlertCircle, Check, Loader2 } from 'lucide-re
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAnomalyService } from './anomaly-service';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { EnvironmentSettings, getRuntimeSettings } from '@/runtime-settings/runtime-settings-action';
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+
+const runtimeSettings: EnvironmentSettings = {
+    grafanaHost: process.env.GRAFANA_HOST || "http://localhost:9000",
+    grafanaDashboardPath: process.env.GRAFANA_DASHBOARD_PATH || "/d/cefo8i1m8lon4a/anomaly-count-comparison-working?orgId=1&from=now-1m&to=now&timezone=browser&refresh=10s&kiosk",
+    anomalyApiHost: process.env.ANOMALY_API_HOST || "http://localhost:5258"
+}
 
 export default function ApiControlPanel() {
 
@@ -38,12 +45,30 @@ export default function ApiControlPanel() {
     const [submitResult, setSubmitResult] = useState<{ success: boolean, message: string } | null>(null);
 
     useEffect(() => {
+        const loadRuntimeSettings = async () => {
+            const curRuntimeSettings = await getRuntimeSettings();
+
+            if (curRuntimeSettings) {
+                const endpoints: ApiEndpoint[] = [
+                    { url: `${curRuntimeSettings.anomalyApiHost}/api/User`, weight: 1, method: 'GET', body: null },
+                    { url: `${curRuntimeSettings.anomalyApiHost}/api/User/1`, weight: 1, method: 'GET', body: null },
+                    { url: `${curRuntimeSettings.anomalyApiHost}/api/User`, weight: 1, method: 'POST', body: '{"username": "test"}' },
+                    { url: `${curRuntimeSettings.anomalyApiHost}/api/User/1`, weight: 1, method: 'PUT', body: '{"username": "test"}' },
+                    { url: `${curRuntimeSettings.anomalyApiHost}/api/User/1`, weight: 1, method: 'DELETE', body: null }
+                ];
+
+                setEndpoints(endpoints);
+            }
+        }
+
         const loadSettings = async () => {
             const currentSettings = await getAnomalySettings();
             if (currentSettings) {
                 setOptions(currentSettings);
             }
         };
+
+        loadRuntimeSettings();
 
         loadSettings();
     }, []);
@@ -97,11 +122,11 @@ export default function ApiControlPanel() {
     }
 
     const defaultEndpoints: ApiEndpoint[] = [
-        { url: 'http://localhost:5258/api/User', weight: 1, method: 'GET', body: null },
-        { url: 'http://localhost:5258/api/User/1', weight: 1, method: 'GET', body: null },
-        { url: 'http://localhost:5258/api/User', weight: 1, method: 'POST', body: '{"username": "test"}' },
-        { url: 'http://localhost:5258/api/User/1', weight: 1, method: 'PUT', body: '{"username": "test"}' },
-        { url: 'http://localhost:5258/api/User/1', weight: 1, method: 'DELETE', body: null }
+        { url: `${runtimeSettings.anomalyApiHost}/api/User`, weight: 1, method: 'GET', body: null },
+        { url: `${runtimeSettings.anomalyApiHost}/api/User/1`, weight: 1, method: 'GET', body: null },
+        { url: `${runtimeSettings.anomalyApiHost}/api/User`, weight: 1, method: 'POST', body: '{"username": "test"}' },
+        { url: `${runtimeSettings.anomalyApiHost}/api/User/1`, weight: 1, method: 'PUT', body: '{"username": "test"}' },
+        { url: `${runtimeSettings.anomalyApiHost}/api/User/1`, weight: 1, method: 'DELETE', body: null }
     ];
     const [endpoints, setEndpoints] = useState(defaultEndpoints);
 

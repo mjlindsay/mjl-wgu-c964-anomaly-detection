@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { EnvironmentSettings, getRuntimeSettings } from '@/runtime-settings/runtime-settings-action';
 
 export interface AnomalyOptions {
     causeException: boolean;
@@ -40,7 +41,9 @@ export function useAnomalyService() {
         });
 
         try {
-            const response = await fetch('http://localhost:5258/api/Anomaly', {
+            const runtimeSettings = await getRuntimeSettings();
+
+            const response = await fetch(`${runtimeSettings.anomalyApiHost}/api/Anomaly`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -48,7 +51,6 @@ export function useAnomalyService() {
                 body: JSON.stringify(options),
             });
 
-            debugger;
             // Check if the request was successful
             if (response.ok) {
                 const newResult = {
@@ -97,7 +99,9 @@ export function useAnomalyService() {
         });
 
         try {
-            const response = await fetch('http://localhost:5258/api/Anomaly', {
+            const runtimeSettings = await getRuntimeSettings();
+
+            const response = await fetch(`${runtimeSettings.anomalyApiHost}/api/Anomaly`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
