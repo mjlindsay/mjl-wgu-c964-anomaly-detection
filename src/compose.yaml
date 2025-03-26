@@ -107,3 +107,20 @@ services:
       - "4321:4321" # otlp grpc
     depends_on:
       - tempo-init
+  model:
+    image: michaellindsayj/wgu-c964:hst-model-v0.0.1
+    environment:
+      - OTLP_HOST=http://otel:4319
+      - KAFKA_HOST=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+        restart: true
+  anomaly-api:
+    image: michaellindsayj/wgu-c964:anomaly-api-v0.0.1
+    depends_on:
+      otel:
+        condition: service_started
+        restart: true
+    ports:
+      - 5258:5258
