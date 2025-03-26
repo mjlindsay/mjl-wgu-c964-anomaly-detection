@@ -205,7 +205,7 @@ model = compose.Pipeline(
 
 def load_baseline_data():
     print("Loading training data...")
-    with open('trace_training_data.json') as f:
+    with open('baseline_data.json') as f:
         training_data = json.load(f)
 
         for record in training_data:

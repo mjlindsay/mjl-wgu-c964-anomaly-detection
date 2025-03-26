@@ -25,7 +25,7 @@ model = compose.Pipeline(
 )
 
 def transform_example_data():
-    with open('trace_training_data.json') as f:
+    with open('baseline_data.json') as f:
         training_data = json.load(f)
 
         classified_data = []
@@ -41,7 +41,7 @@ def transform_example_data():
                 "is_anomaly": anomaly
             })
 
-        with open('trace_data_transformed_classified.json', 'w') as cf:
+        with open('baseline_data_classified.json', 'w') as cf:
             json.dump(classified_data, cf)
 
 transform_example_data()
