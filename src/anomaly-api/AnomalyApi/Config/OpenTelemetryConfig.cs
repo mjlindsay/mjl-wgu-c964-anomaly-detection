@@ -10,6 +10,6 @@ public record class OpenTelemetryConfig
     [JsonConverter(typeof(JsonStringEnumConverter<OtlpProtocol>))]
     public OtlpProtocol Protocol { get; set; } = OtlpProtocol.Grpc;
 
-    public string ServiceName { get; set; } = "MockAPI";
+    public string ServiceName { get; set; } = "AnomalyApi";
 
 }

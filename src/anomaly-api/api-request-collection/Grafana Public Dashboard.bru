@@ -1,0 +1,24 @@
+meta {
+  name: Grafana PUblic Dashboard
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:9000/api/dashboards/uid/:uid/public-dashboards/
+  body: json
+  auth: none
+}
+
+params:path {
+  uid: cefo8i1m8lon4a
+}
+
+body:json {
+  {
+    "uid": "00000000-0000-0000-0000-000000000000",
+    "accessToken": "a61e3b49d6ac45a1a6e94a2f9d43548c",
+    "isEnabled": true,
+    "timeSelectionEnabled": true
+  }
+}
