@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 3,
   "links": [],
   "panels": [
     {
@@ -125,7 +125,7 @@
           "useBackend": false
         }
       ],
-      "title": "Anomalous vs. Nominal Metrics, Last Minute",
+      "title": "Anomalous vs. Nominal Metrics",
       "type": "piechart"
     },
     {
@@ -496,7 +496,7 @@
           "useBackend": false
         }
       ],
-      "title": "Anomaly Score Distributions, Last Minute",
+      "title": "Anomaly Score Distributions",
       "type": "bargauge"
     },
     {
@@ -552,7 +552,7 @@
       "targets": [
         {
           "limit": 20,
-          "query": "{span.http.request.method!=\"OPTIONS\"} >> {} | select(span.is_anomaly)",
+          "query": "{span.http.request.method!=\"OPTIONS\" && span.http.route!=\"/health\"} >> {} | select(span.is_anomaly)",
           "queryType": "traceql",
           "refId": "A",
           "tableType": "traces"
@@ -563,7 +563,7 @@
     }
   ],
   "preload": true,
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 40,
   "tags": [],
   "templating": {
@@ -587,8 +587,8 @@
     ]
   },
   "timezone": "browser",
-  "title": "Anomaly Count Comparison Working",
-  "uid": "cefo8i1m8lon4a",
-  "version": 9,
+  "title": "Anomaly Count Comparison",
+  "uid": "cegz20kg0qry8c",
+  "version": 2,
   "weekStart": ""
 }
