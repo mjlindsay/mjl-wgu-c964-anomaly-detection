@@ -80,7 +80,7 @@ services:
         sleep 15 && # Give Grafana time to fully initialize
         curl -v \
           --request POST \
-          --url http://grafana:9000/api/dashboards/uid/cefo8i1m8lon4a/public-dashboards/ \
+          --url http://grafana:9000/api/dashboards/uid/cegz20kg0qry8c/public-dashboards/ \
           --header "content-type: application/json" \
           --data '{"uid": "00000000-0000-0000-0000-000000000000","accessToken": "a61e3b49d6ac45a1a6e94a2f9d43548c","isEnabled": true,"timeSelectionEnabled": true}'
     depends_on:
@@ -108,7 +108,7 @@ services:
     depends_on:
       - tempo-init
   model:
-    image: michaellindsayj/wgu-c964:hst-model-v0.0.1
+    image: michaellindsayj/wgu-c964:hst-model-v0.0.3
     environment:
       - OTLP_HOST=http://otel:4319
       - KAFKA_HOST=kafka:9092
@@ -117,10 +117,20 @@ services:
         condition: service_healthy
         restart: true
   anomaly-api:
-    image: michaellindsayj/wgu-c964:anomaly-api-v0.0.1
+    image: michaellindsayj/wgu-c964:anomaly-api-v0.0.3
+    ports:
+      - 5258:5258
     depends_on:
       otel:
         condition: service_started
         restart: true
+  anomaly-ui:
+    image: michaellindsayj/wgu-c964:anomaly-ui-v0.0.1
+    environment:
+      - GRAFANA_DASHBOARD_PATH=/d/cegz20kg0qry8c/anomaly-count-comparison?orgId=1&from=now-1m&to=now&timezone=browser&refresh=30s&kiosk
     ports:
-      - 5258:5258
+      - 80:80
+    depends_on:
+      anomaly-api:
+        condition: service_healthy
+        restart: true
