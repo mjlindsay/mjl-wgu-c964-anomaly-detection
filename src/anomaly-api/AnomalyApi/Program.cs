@@ -26,6 +26,8 @@ builder.Services.AddCors(options => {
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddHealthChecks();
+
 var openTelemetryConfig = builder.RegisterConfig<OpenTelemetryConfig>();
 
 builder.Services.AddOpenTelemetry()
@@ -96,5 +98,6 @@ app.UseCors("default");
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();
