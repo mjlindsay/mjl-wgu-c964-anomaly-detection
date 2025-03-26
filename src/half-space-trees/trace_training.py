@@ -17,16 +17,14 @@ cat = compose.SelectType(str) | preprocessing.OneHotEncoder()
 num = compose.SelectType(numbers.Number) | preprocessing.StandardScaler()
 scaler = (cat + num)
 
-#filter = anomaly.QuantileFilter(q = 0.6, anomaly_detector=half_space_trees)
-#filter = anomaly.ThresholdFilter(half_space_trees, 0.6)
-filter = anomaly.QuantileFilter(half_space_trees, q=0.85)
+filter = anomaly.ThresholdFilter(half_space_trees, 0.8)
 
 model = compose.Pipeline(
     scaler,
     filter
 )
 
-def learn_many_predict_many():
+def transform_example_data():
     with open('trace_training_data.json') as f:
         training_data = json.load(f)
 
@@ -37,13 +35,13 @@ def learn_many_predict_many():
 
         for record in training_data:
             score = model.score_one(record)
-            anomaly = model["QuantileFilter"].classify(score)
+            anomaly = model["ThresholdFilter"].classify(score)
             classified_data.append(record | {
                 "score": score,
                 "is_anomaly": anomaly
             })
 
-        with open('trace_data_transformed_classified_quantile.json', 'w') as cf:
+        with open('trace_data_transformed_classified.json', 'w') as cf:
             json.dump(classified_data, cf)
 
-learn_many_predict_many()
+transform_example_data()

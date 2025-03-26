@@ -7,6 +7,7 @@ import numbers
 from confluent_kafka import Consumer
 from river import preprocessing, metrics, datasets, compose, anomaly
 from csv import writer
+import configargparse
 
 from opentelemetry import (
     trace,
@@ -42,20 +43,37 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     '-t', '--training',
     default=False,
-    action='store_true',
-    help='Run in training mode (learning without anomaly detection)')
+    action="store_true",
+    env_var="TRAINING_MODE_ENABLED",
+    help='Run in training mode (learning without anomaly detection)'
+)
 
 parser.add_argument(
     '-s', '--stage-output',
     default=False,
-    action='store_true',
+    action="store_true",
+    env_var="STAGE_OUTPUT_ENABLED",
     help='Output feature data at different stages of the pipeline (raw input, manual, etc.)'
+)
+
+parser.add_argument(
+    "-o", "--otlp-host",
+    default="http://127.0.0.1:4319",
+    env_var="OTLP_HOST",
+    help="Host and port to emit telemetry to."
+)
+
+parser.add_argument(
+    "-k", "--kafka-host",
+    default="host.docker.internal:9094",
+    env_var="KAFKA_HOST",
+    help="Host and port of Kafka server to read traces from."
 )
 
 args = parser.parse_args()
 
 metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(
-    endpoint="http://127.0.0.1:4319",
+    endpoint=args.otlp_host,
     insecure=True,
     preferred_temporality={Histogram: AggregationTemporality.DELTA}
 ), export_interval_millis=2000)
@@ -82,7 +100,7 @@ anomaly_score_value = anomaly_meter.create_gauge("anomaly_score")
 
 provider = TracerProvider()
 processor = SimpleSpanProcessor(OTLPSpanExporter(
-    endpoint="http://127.0.0.1:4319",
+    endpoint=args.otlp_host,
     insecure=True
 ))
 provider.add_span_processor(processor)
@@ -91,6 +109,10 @@ tracer = trace.get_tracer("anomaly.hst")
 propogator = TraceContextTextMapPropagator()
 
 def write_stage(stage_name, dict):
+    '''
+    Saves a JSON object to a file according to the stage name and timestamp. Useful for debugging and fast iteration.
+    Does not do anything unless args.stage_output is set to true.
+    '''
     if not args.stage_output:
         return
     
@@ -209,21 +231,40 @@ def detect_anomaly(trace_id, features) -> bool:
     return is_anomaly
 
 training_data_buffer = []
-def process_training_record(features: dict):    
+def save_preprocessed_trace_record(features: dict):    
+    '''
+    Saves a pre-processed trace record for training and exploration purposes.
+    '''
     training_data_buffer.append(features)
 
     if len(training_data_buffer) >= 1000:
         timestamp = datetime.datetime.now().strftime('%H-%M-%S-%f')
 
-        with open(f'trace_training_data_{timestamp}.json', 'w') as f:
+        with open(f'trace_training_data_processed_{timestamp}.json', 'w') as f:
             json.dump(training_data_buffer, f, indent=4)
         
         training_data_buffer.clear()
 
+raw_trace_buffer = []
+def save_raw_trace(trace):
+    '''
+    Saves a raw trace record for training and exploration purposes.
+    '''
+    raw_trace_buffer.append(trace)
+
+    if len(raw_trace_buffer) >= 1000:
+        timestamp = datetime.datetime.now().strftime('%H-%M-%S-%f')
+
+        with open(f'trace_training_data_raw_{timestamp}.json', 'w') as f:
+            json.dump(raw_trace_buffer, f, indent=4)
+        
+        raw_trace_buffer.clear()
+
+
 if __name__ == '__main__':
     config = {
         # User-specific properties that you must set
-        'bootstrap.servers': 'host.docker.internal:9094',
+        'bootstrap.servers': args.kafka_host,
 
         # Fixed properties
         'group.id':          'anomaly-ml-model',
@@ -252,17 +293,17 @@ if __name__ == '__main__':
             elif msg.error():
                 print("ERROR: %s".format(msg.error()))
             else:
-                data = json.loads(msg.value())
+                raw_trace_data = json.loads(msg.value())
 
-                source_context = extract_trace_context(data)
+                source_context = extract_trace_context(raw_trace_data)
                 with tracer.start_as_current_span("anomaly_detection", context=source_context) as span:
                     # Extract the (optional) key and value, and print.
                     print("Consumed event from topic {topic}: value = {value:12}".format(
                         topic=msg.topic(), value=msg.value().decode('utf-8')))
 
-                    write_stage('raw', data)
+                    write_stage('raw', raw_trace_data)
                     
-                    trace_id, manually_transformed_features = extract_trace_features(data)
+                    trace_id, manually_transformed_features = extract_trace_features(raw_trace_data)
 
                     # We don't want to handle data that we couldn't extract meaningful features from.
                     if (manually_transformed_features is None):
@@ -271,7 +312,8 @@ if __name__ == '__main__':
                     write_stage('manual', manually_transformed_features)
 
                     if args.training:
-                        process_training_record(manually_transformed_features)
+                        save_raw_trace(raw_trace_data)
+                        save_preprocessed_trace_record(manually_transformed_features)
                     else:
                         detect_anomaly(trace_id, manually_transformed_features)
     except KeyboardInterrupt:
