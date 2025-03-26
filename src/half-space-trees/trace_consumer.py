@@ -138,6 +138,8 @@ method_map = {
 # Routes that should not be included as they are used for setup and demonstration purposes.
 exclude_routes = [
     "api/Anomaly",
+    "health",
+    "/health"
 ]
 
 def extract_trace_context(data):
