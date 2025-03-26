@@ -36,8 +36,8 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
     OTLPSpanExporter
 )
 
-parser = argparse.ArgumentParser(
-    description='Anomaly detection using Half-Space Trees'
+parser = configargparse.ArgumentParser(
+    description='Anomaly detection using Half-Space Trees',
 )
 
 parser.add_argument(
