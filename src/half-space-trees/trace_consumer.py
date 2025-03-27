@@ -142,6 +142,11 @@ exclude_routes = [
     "/health"
 ]
 
+# Methods that should not be included as they are not part of the primary API
+exclude_methods = [
+    "OPTIONS"
+]
+
 def extract_trace_context(data):
     primary_span = data["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
     trace_id = primary_span["traceId"]
@@ -162,12 +167,17 @@ def extract_trace_features(data):
 
     for attr in primary_span["attributes"]:
         if attr["key"] == "http.request.method":
+            method = attr["value"]["stringValue"]
+            if method in exclude_methods:
+                return "", None
+            
+            # Return condition if we are on a method we don't want to include in our evaluation criteria
             flattened_features = flattened_features | { "request_method": method_map[attr["value"]["stringValue"]] }
         elif attr["key"] == "error.type":
             flattened_features = flattened_features | { "error_type": attr["value"]["stringValue"] }
         elif attr["key"] == "http.route":
             route = attr["value"]["stringValue"]
-            # Return condition if we are on a route we don't like
+            # Return condition if we are on a route we don't want to include in our evaluation criteria
             if route in exclude_routes:
                 return "", None
             
