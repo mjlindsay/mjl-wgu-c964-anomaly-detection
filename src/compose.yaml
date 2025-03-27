@@ -12,6 +12,13 @@ services:
         source: ./otel-config.yaml
         target: /etc/otelcol-contrib/config.yaml
         read_only: true
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "localhost:13133"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
     depends_on:
       kafka:
         condition: service_healthy
@@ -30,6 +37,7 @@ services:
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    restart: on-failure
     healthcheck:
       test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
       interval: 5s
@@ -41,6 +49,7 @@ services:
     image: provectuslabs/kafka-ui:latest
     ports:
       - 8080:8080
+    restart: on-failure
     environment:
       DYNAMIC_CONFIG_ENABLED: true
     volumes:
@@ -50,12 +59,14 @@ services:
     image: prom/prometheus
     ports:
       - 9090:9090
+    restart: on-failure
     volumes:
       - ./prom-config.yaml:/etc/prometheus/prometheus.yml
       - ./prometheus-data/:/prometheus
   grafana:
     container_name: grafana
     image: &grafanaImage grafana/grafana-enterprise
+    restart: on-failure
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/api/health"]
       interval: 5s
@@ -83,6 +94,7 @@ services:
           --url http://grafana:9000/api/dashboards/uid/cegz20kg0qry8c/public-dashboards/ \
           --header "content-type: application/json" \
           --data '{"uid": "00000000-0000-0000-0000-000000000000","accessToken": "a61e3b49d6ac45a1a6e94a2f9d43548c","isEnabled": true,"timeSelectionEnabled": true}'
+    restart: on-failure
     depends_on:
       grafana:
         condition: service_healthy
@@ -94,6 +106,7 @@ services:
       - "chown"
       - "10001:10001"
       - "/var/tempo"
+    restart: on-failure
     volumes:
       - ./tempo-data:/var/tempo
   tempo:
@@ -105,6 +118,7 @@ services:
     ports:
       - "3200:3200" # tempo
       - "4321:4321" # otlp grpc
+    restart: on-failure
     depends_on:
       - tempo-init
   model:
@@ -112,6 +126,7 @@ services:
     environment:
       - OTLP_HOST=http://otel:4319
       - KAFKA_HOST=kafka:9092
+    restart: on-failure
     depends_on:
       kafka:
         condition: service_healthy
@@ -120,6 +135,7 @@ services:
     image: michaellindsayj/wgu-c964:anomaly-api-v0.0.3
     ports:
       - 5258:5258
+    restart: on-failure
     depends_on:
       otel:
         condition: service_started
@@ -130,6 +146,7 @@ services:
       - GRAFANA_DASHBOARD_PATH=/d/cegz20kg0qry8c/anomaly-count-comparison?orgId=1&from=now-1m&to=now&timezone=browser&refresh=30s&kiosk
     ports:
       - 80:80
+    restart: on-failure
     depends_on:
       anomaly-api:
         condition: service_healthy

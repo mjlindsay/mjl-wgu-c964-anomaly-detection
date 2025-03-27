@@ -1,3 +1,6 @@
+extensions:
+  health_check:
+
 receivers:
   otlp/dotnet:
     protocols:
